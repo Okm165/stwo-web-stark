@@ -189,7 +189,7 @@ export default function Home() {
   return (
     <div className="grid gap-6 p-4 max-w-[800px] m-auto">
       <h1 className="text-2xl font-bold text-center text-gray-300">
-        Cairo Fibonacci circuit
+        Cairo circuit
       </h1>
       <h1 className="text-2xl font-bold text-center text-gray-300">
         Run - Prove - Verify
