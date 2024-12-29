@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: stwo-web-stark-cert
+  namespace: stwo-web-stark
+spec:
+  secretName: stwo-web-stark-tls
+
+  dnsNames:
+    - demo.stwo-web-stark.iosis.tech
+  issuerRef:
+    name: letsencrypt-http01
+    kind: Issuer

@@ -1,0 +1,14 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: letsencrypt-http01
+  namespace: stwo-web-stark
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-http01-issuer-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: nginx-ingress-prod
