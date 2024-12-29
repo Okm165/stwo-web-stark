@@ -7,7 +7,7 @@ spec:
   secretName: stwo-web-stark-tls
 
   dnsNames:
-    - demo.stwo-web-stark.iosis.tech
+    - demo.stwo.iosis.tech
   issuerRef:
     name: letsencrypt-http01
     kind: Issuer

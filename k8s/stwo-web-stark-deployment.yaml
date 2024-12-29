@@ -43,10 +43,10 @@ spec:
   ingressClassName: nginx-ingress-prod
   tls:
     - hosts:
-        - demo.stwo-web-stark.iosis.tech
+        - demo.stwo.iosis.tech
       secretName: stwo-web-stark-tls
   rules:
-    - host: demo.stwo-web-stark.iosis.tech
+    - host: demo.stwo.iosis.tech
       http:
         paths:
           - path: /
