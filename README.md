@@ -1,6 +1,6 @@
 # Project Overview
 
-This project provides web demo of proving Cairo programs with [stwo](https://github.com/starkware-libs/stwo) prover.
+This project provides web demo of proving Cairo programs with [stwo](https://github.com/starkware-libs/stwo) prover (WIP).
 
 ## Getting Started
 
