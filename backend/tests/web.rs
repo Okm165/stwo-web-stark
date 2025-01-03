@@ -3,7 +3,7 @@
 #![cfg(target_arch = "wasm32")]
 
 extern crate wasm_bindgen_test;
-use stwo_web_stark::{trace_gen, prove, verify};
+use stwo_web_stark::{prove, trace_gen, verify};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
