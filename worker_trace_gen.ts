@@ -18,7 +18,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         const value = await run_trace_gen(input);
 
         // Send results back to the main thread
-        const response: WorkerResponse = { execution_resources: value.execution_resources, value: value.cairo_input };
+        const response: WorkerResponse = { execution_resources: value.execution_resources, value: value.prover_input };
         self.postMessage(response);
     } catch (error) {
         // Send error back to the main thread
