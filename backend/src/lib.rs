@@ -70,16 +70,6 @@ pub fn run_verify(proof_js: JsValue) -> Result<JsValue, JsValue> {
     Ok(serde_wasm_bindgen::to_value(&verdict)?)
 }
 
-#[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-}
-
-#[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, backend!");
-}
-
 pub fn trace_gen(program_content: Vec<u8>) -> Result<TraceGenOutput, VmError> {
     let cairo_run_config = cairo_run::CairoRunConfig {
         trace_enabled: true,
