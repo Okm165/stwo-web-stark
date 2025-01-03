@@ -1,18 +1,21 @@
 mod utils;
 
-use cairo_vm::cairo_run;
-use cairo_vm::hint_processor::builtin_hint_processor::builtin_hint_processor_definition::BuiltinHintProcessor;
-use cairo_vm::types::layout_name::LayoutName;
-use cairo_vm::vm::errors::cairo_run_errors::CairoRunError;
-use cairo_vm::vm::runners::cairo_runner::ExecutionResources;
+use cairo_vm::{
+    cairo_run,
+    hint_processor::builtin_hint_processor::builtin_hint_processor_definition::BuiltinHintProcessor,
+    types::layout_name::LayoutName,
+    vm::{errors::cairo_run_errors::CairoRunError, runners::cairo_runner::ExecutionResources},
+};
 use serde::{Deserialize, Serialize};
-use stwo_cairo_prover::cairo_air::air::CairoProof;
-use stwo_cairo_prover::cairo_air::{prove_cairo, verify_cairo};
-use stwo_cairo_prover::input::plain::adapt_finished_runner;
-use stwo_cairo_prover::input::ProverInput;
+use stwo_cairo_prover::{
+    cairo_air::{air::CairoProof, prove_cairo, verify_cairo},
+    input::{plain::adapt_finished_runner, ProverInput},
+};
 use stwo_cairo_utils::vm_utils::VmError;
-use stwo_prover::core::prover::ProvingError;
-use stwo_prover::core::vcs::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher};
+use stwo_prover::core::{
+    prover::ProvingError,
+    vcs::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher},
+};
 use utils::set_panic_hook;
 use wasm_bindgen::prelude::*;
 
