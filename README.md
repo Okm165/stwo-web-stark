@@ -7,6 +7,7 @@ This project provides web demo of proving Cairo programs with [stwo](https://git
 ### Build the WASM Backend
 
 For detailed instructions, refer to the [backend README](./backend/README.md).
+Backend [NPM package](https://www.npmjs.com/package/stwo-web-stark)
 
 ### Run the Development Server
 
