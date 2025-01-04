@@ -1,12 +1,12 @@
 import init, { run_prove } from "stwo-web-stark";
 
 export interface WorkerMessage {
-    input: Uint8Array;
+    input: string;
 }
 
 export interface WorkerResponse {
-    value?: Uint8Array;
-    error?: string;
+    value?: string;
+    error?: Error;
 }
 
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
@@ -21,7 +21,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         self.postMessage(response);
     } catch (error) {
         // Send error back to the main thread
-        const response: WorkerResponse = { error: (error as Error).message };
+        const response: WorkerResponse = { error: error as Error };
         self.postMessage(response);
     }
 };

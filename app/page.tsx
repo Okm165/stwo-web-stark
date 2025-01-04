@@ -10,9 +10,9 @@ import { useDropzone } from "react-dropzone";
 
 export default function Home() {
   const workerRef = useRef<Worker>(null);
-  const [trace, setTrace] = useState<Uint8Array | null>(null);
-  const [executionResources, setExecutionResources] = useState<object | null>(null);
-  const [proof, setProof] = useState<Uint8Array | null>(null);
+  const [trace, setTrace] = useState<string | null>(null);
+  const [executionResources, setExecutionResources] = useState<string | null>(null);
+  const [proof, setProof] = useState<string | null>(null);
   const [verify, setVerify] = useState<boolean | null>(null);
 
   const [timeTraceGen, setTimeTraceGen] = useState<number | null>(null);
@@ -24,7 +24,7 @@ export default function Home() {
   const [timeVerify, setTimeVerify] = useState<number | null>(null);
   const [isLoadingVerify, setIsLoadingVerify] = useState<boolean>(false);
 
-  const [program, setProgram] = useState<Uint8Array | null>(null);
+  const [program, setProgram] = useState<string | null>(null);
   const [isLoadingProgram, setIsLoadingProgram] = useState<boolean>(false);
 
   const [fileName, setFileName] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export default function Home() {
 
     reader.onload = async (e) => {
       if (e.target && e.target.result) {
-        setProgram(new Uint8Array(e.target.result as ArrayBuffer));
+        setProgram(new TextDecoder().decode((e.target.result as ArrayBuffer)));
         setFileName(file.name);
         setFileSize(file.size);
       }
@@ -88,13 +88,13 @@ export default function Home() {
       const startTime = Date.now();
 
       workerRef.current.onmessage = (event: MessageEvent<WorkerResponseTraceGen>) => {
-        const { execution_resources, value, error } = event.data;
+        const { execution_resources, prover_input, error } = event.data;
 
         if (error) {
           console.error(error);
-        } else if (value && execution_resources) {
-          setTrace(value);
+        } else if (prover_input && execution_resources) {
           setExecutionResources(execution_resources);
+          setTrace(prover_input);
         }
 
         const endTime = Date.now();
@@ -239,11 +239,10 @@ export default function Home() {
           }
 
           // Get the file as an ArrayBuffer and convert it to Uint8Array
-          const arrayBuffer = await response.arrayBuffer();
-          const uint8Array = new Uint8Array(arrayBuffer);
-          setProgram(uint8Array);
+          const file = await response.arrayBuffer();
+          setProgram(new TextDecoder().decode(file));
           setFileName("fibonacci_1000.json");
-          setFileSize(uint8Array.length);
+          setFileSize(file.byteLength);
           setIsLoadingProgram(false);
         }}
       >
@@ -285,9 +284,33 @@ export default function Home() {
         <div className="grid justify-center gap-1 text-xs min-h-6">
           {timeTraceGen !== null ? `Time: ${timeTraceGen / 1000} seconds` : null}
         </div>
-        <div className="grid justify-center gap-1 text-xs min-h-6">
-          {executionResources !== null ? JSON.stringify(executionResources) : ""}
-        </div>
+
+        <Button
+          sx={{
+            height: 30,
+          }}
+          variant="text"
+          size="small"
+          disabled={trace == null}
+          onClick={async () => {
+            if (trace != null) {
+              const blob = new Blob([trace], { type: 'application/json' });
+              const download_url = window.URL.createObjectURL(blob);
+
+              // Create an anchor element for downloading the file
+              const a = document.createElement("a");
+              a.href = download_url;
+              a.download = "trace.json";
+              document.body.appendChild(a);
+              a.click();
+
+              document.body.removeChild(a);
+              window.URL.revokeObjectURL(download_url);
+            }
+          }}
+        >
+          Download Trace
+        </Button>
       </div>
 
       <div className="grid grid-flow-row gap-4">
@@ -316,6 +339,32 @@ export default function Home() {
         <div className="grid justify-center gap-1 text-xs min-h-6">
           {timeProve !== null ? `Time: ${timeProve / 1000} seconds` : null}
         </div>
+        <Button
+          sx={{
+            height: 30,
+          }}
+          variant="text"
+          size="small"
+          disabled={proof == null}
+          onClick={async () => {
+            if (proof != null) {
+              const blob = new Blob([proof], { type: 'application/json' });
+              const download_url = window.URL.createObjectURL(blob);
+
+              // Create an anchor element for downloading the file
+              const a = document.createElement("a");
+              a.href = download_url;
+              a.download = "proof.json";
+              document.body.appendChild(a);
+              a.click();
+
+              document.body.removeChild(a);
+              window.URL.revokeObjectURL(download_url);
+            }
+          }}
+        >
+          Download Proof
+        </Button>
       </div>
 
       <div className="grid grid-flow-row gap-4">
@@ -348,13 +397,18 @@ export default function Home() {
       </div>
 
       <textarea
-        className="bg-gray-900 text-sm resize-both h-32"
-        value={trace?.toString()}
+        className="bg-gray-900 text-sm resize-both h-20"
+        value={executionResources ?? ""}
         readOnly
       />
       <textarea
         className="bg-gray-900 text-sm resize-both h-32"
-        value={proof?.toString()}
+        value={trace ?? ""}
+        readOnly
+      />
+      <textarea
+        className="bg-gray-900 text-sm resize-both h-32"
+        value={proof ?? ""}
         readOnly
       />
     </div>
