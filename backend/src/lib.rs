@@ -91,15 +91,14 @@ pub fn trace_gen(program: Program) -> Result<TraceGenOutput, VmError> {
     let cairo_runner = match cairo_runner_result {
         Ok(runner) => runner,
         Err(error) => {
-            eprintln!("{error}");
-            return Err(VmError::Runner(error));
+            return Err(VmError::Runner(error.to_string()));
         }
     };
 
     Ok(TraceGenOutput {
         execution_resources: cairo_runner
             .get_execution_resources()
-            .map_err(CairoRunError::Runner)?,
+            .map_err(|e| VmError::Runner(CairoRunError::Runner(e).to_string()))?,
         prover_input: adapt_finished_runner(cairo_runner, false),
     })
 }
