@@ -16,7 +16,7 @@ cairo-vm = { git = "https://github.com/lambdaclass/cairo-vm", rev = "83bfdcf", f
 ], default-features = false}
 stwo_cairo_prover = { git = "https://github.com/Okm165/stwo-cairo", branch = "wasm" }
 stwo_cairo_utils = { git = "https://github.com/Okm165/stwo-cairo", branch = "wasm" }
-stwo-prover = { git = "https://github.com/starkware-libs/stwo", rev = "9d3afa43", features = [
+stwo-prover = { git = "https://github.com/starkware-libs/stwo", rev = "af5475cb", features = [
     "parallel",
 ], default-features = false}
 thiserror-no-std = "2.0.2"

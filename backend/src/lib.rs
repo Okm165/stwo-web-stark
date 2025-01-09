@@ -8,7 +8,7 @@ use cairo_vm::{
 };
 use serde::{Deserialize, Serialize};
 use stwo_cairo_prover::{
-    cairo_air::{air::CairoProof, prove_cairo, verify_cairo},
+    cairo_air::{air::CairoProof, prove_cairo, verify_cairo, ProverConfig},
     input::{plain::adapt_finished_runner, ProverInput},
 };
 use stwo_cairo_utils::vm_utils::VmError;
@@ -104,7 +104,7 @@ pub fn trace_gen(program: Program) -> Result<TraceGenOutput, VmError> {
 }
 
 pub fn prove(prover_input: ProverInput) -> Result<CairoProof<Blake2sMerkleHasher>, ProvingError> {
-    prove_cairo::<Blake2sMerkleChannel>(prover_input, false, false)
+    prove_cairo::<Blake2sMerkleChannel>(prover_input, ProverConfig::default())
 }
 
 pub fn verify(cairo_proof: CairoProof<Blake2sMerkleHasher>) -> bool {
