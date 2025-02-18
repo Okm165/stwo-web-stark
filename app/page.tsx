@@ -24,7 +24,7 @@ export default function Home() {
   const [timeVerify, setTimeVerify] = useState<number | null>(null);
   const [isLoadingVerify, setIsLoadingVerify] = useState<boolean>(false);
 
-  const [program, setProgram] = useState<string | null>(null);
+  const [program, setProgram] = useState<Uint8Array | null>(null);
   const [isLoadingProgram, setIsLoadingProgram] = useState<boolean>(false);
 
   const [fileName, setFileName] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export default function Home() {
 
     reader.onload = async (e) => {
       if (e.target && e.target.result) {
-        setProgram(new TextDecoder().decode((e.target.result as ArrayBuffer)));
+        setProgram(new Uint8Array(e.target.result as ArrayBuffer));
         setFileName(file.name);
         setFileSize(file.size);
       }
@@ -210,10 +210,10 @@ export default function Home() {
             {fileName} - {humanFileSize(fileSize)}
           </p>
         ) : isDragActive ? (
-          <p className="text-center">Drop the Trace here ...</p>
+          <p className="text-center">Drop the Cairo PIE here ...</p>
         ) : (
           <p className="text-center">
-            Drag Proof json here, or click to select files
+            Drag Cairo PIE here, or click to select files
           </p>
         )}
       </div>
@@ -232,7 +232,7 @@ export default function Home() {
         disabled={isLoadingProgram}
         onClick={async () => {
           setIsLoadingProgram(true);
-          const response = await fetch("fibonacci_1000.json");
+          const response = await fetch("pie.zip");
 
           if (!response.ok) {
             throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
@@ -240,8 +240,8 @@ export default function Home() {
 
           // Get the file as an ArrayBuffer and convert it to Uint8Array
           const file = await response.arrayBuffer();
-          setProgram(new TextDecoder().decode(file));
-          setFileName("fibonacci_1000.json");
+          setProgram(new Uint8Array(file));
+          setFileName("pie.zip");
           setFileSize(file.byteLength);
           setIsLoadingProgram(false);
         }}
@@ -253,7 +253,7 @@ export default function Home() {
           />
         ) : (
           <Box display="flex" flexDirection="column" alignItems="center">
-            <Typography variant="body2">load fibonacci_1000.json</Typography>
+            <Typography variant="body2">load pie.zip</Typography>
           </Box>
         )}
       </Button>

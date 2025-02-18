@@ -1,7 +1,7 @@
 import init, { run_trace_gen } from "stwo-web-stark";
 
 export interface WorkerMessage {
-    input: string;
+    input: Uint8Array;
 }
 
 export interface WorkerResponse {
