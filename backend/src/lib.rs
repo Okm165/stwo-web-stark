@@ -1,9 +1,11 @@
 mod utils;
 
+use cairo_lang_runner::{build_hints_dict, casm_run::format_for_panic, Arg, CairoHintProcessor};
 use cairo_vm::{
     cairo_run,
+    cairo_run::{cairo_run_program, CairoRunConfig},
+    types::{layout_name::LayoutName, program::Program, relocatable::MaybeRelocatable},
     hint_processor::builtin_hint_processor::builtin_hint_processor_definition::BuiltinHintProcessor,
-    types::layout_name::LayoutName,
     vm::{
         errors::cairo_run_errors::CairoRunError,
         runners::{
@@ -14,6 +16,9 @@ use cairo_vm::{
         },
     },
 };
+use num_bigint::BigInt;
+use serde_wasm_bindgen::{self, to_value};
+use cairo_lang_executable::executable::{EntryPointKind, Executable};
 use serde::{Deserialize, Serialize};
 use stwo_cairo_prover::{
     cairo_air::{air::CairoProof, prove_cairo, verify_cairo, ProverConfig},
@@ -37,6 +42,8 @@ pub struct TraceGenOutputJS {
     execution_resources: String,
     prover_input: String,
 }
+
+
 
 pub fn from_zip_archive<R: std::io::Read + std::io::Seek>(
     mut zip_reader: zip::ZipArchive<R>,
@@ -72,6 +79,130 @@ pub fn from_zip_archive<R: std::io::Read + std::io::Seek>(
         additional_data,
         version,
     })
+}
+
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CairoPieDef {
+    pub metadata: CairoPieMetadata,
+    pub memory: CairoPieMemory,
+    pub execution_resources: ExecutionResources,
+    pub additional_data: CairoPieAdditionalData,
+    pub version: CairoPieVersion,
+}
+
+impl From<CairoPie> for CairoPieDef {
+    fn from(item: CairoPie) -> Self {
+        CairoPieDef {
+            metadata: item.metadata,
+            memory: item.memory,
+            execution_resources: item.execution_resources,
+            additional_data: item.additional_data,
+            version: item.version,
+        }
+    }
+}
+
+impl From<CairoPieDef> for CairoPie {
+    fn from(item: CairoPieDef) -> Self {
+        CairoPie {
+            metadata: item.metadata,
+            memory: item.memory,
+            execution_resources: item.execution_resources,
+            additional_data: item.additional_data,
+            version: item.version,
+        }
+    }
+}
+
+
+
+#[wasm_bindgen]
+pub fn execute(executable: JsValue, exacutable_args: JsValue) -> JsValue {
+    let executable: Executable = serde_wasm_bindgen::from_value(executable).unwrap();
+
+    let data = executable
+        .program
+        .bytecode
+        .iter()
+        .map(Felt252::from)
+        .map(MaybeRelocatable::from)
+        .collect();
+
+    let (hints, string_to_hint) = build_hints_dict(&executable.program.hints);
+
+    let entrypoint = executable
+        .entrypoints
+        .iter()
+        .find(|e| matches!(e.kind, EntryPointKind::Bootloader))
+        .with_context(|| "no `Bootloader` entrypoint found")
+        .unwrap();
+
+    let program = Program::new(
+        entrypoint.builtins.clone(),
+        data,
+        Some(entrypoint.offset),
+        hints,
+        Default::default(),
+        Default::default(),
+        vec![],
+        None,
+    )
+    .with_context(|| "failed setting up program")
+    .unwrap();
+
+    let user_args: Vec<BigInt> = serde_wasm_bindgen::from_value(exacutable_args).unwrap();
+
+    let mut hint_processor = CairoHintProcessor {
+        runner: None,
+        user_args: vec![vec![Arg::Array(
+            user_args.iter().map(|x| Arg::Value(x.into())).collect(),
+        )]],
+        string_to_hint,
+        starknet_state: Default::default(),
+        run_resources: Default::default(),
+        syscalls_used_resources: Default::default(),
+        no_temporary_segments: false,
+        markers: Default::default(),
+        panic_traceback: Default::default(),
+    };
+
+    let cairo_run_config = CairoRunConfig {
+        allow_missing_builtins: Some(true),
+        layout: LayoutName::all_cairo,
+        proof_mode: false,
+        secure_run: None,
+        relocate_mem: true,
+        trace_enabled: true,
+        ..Default::default()
+    };
+
+    let runner = cairo_run_program(&program, &cairo_run_config, &mut hint_processor)
+        .map_err(|err| {
+            if let Some(panic_data) = hint_processor.markers.last() {
+                anyhow!(format_for_panic(panic_data.iter().copied()))
+            } else {
+                anyhow::Error::from(err).context("Cairo program run failed")
+            }
+        })
+        .unwrap();
+
+    let output_value = runner.get_cairo_pie().unwrap();
+
+    return to_value(&output_value).unwrap();
+}
+
+#[wasm_bindgen]
+pub fn trace_gen_from_obj(pie: JsValue) -> Result<JsValue, JsValue> {
+    let cairo_pie: CairoPieDef = serde_wasm_bindgen::from_value(pie).unwrap();
+    let trace_gen_output = trace_gen(cairo_pie.into())
+        .map_err(|e| JsValue::from(format!("Failed to generate trace: {e}")))?;
+    Ok(serde_wasm_bindgen::to_value(&TraceGenOutputJS {
+        prover_input: serde_json::to_string(&trace_gen_output.prover_input)
+            .map_err(|e| JsValue::from(format!("Failed to serialize prover input: {e}")))?,
+        execution_resources: serde_json::to_string(&trace_gen_output.execution_resources)
+            .map_err(|e| JsValue::from(format!("Failed to serialize execution resources: {e}")))?,
+    })?)
 }
 
 #[wasm_bindgen]
