@@ -11,16 +11,17 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies]
-cairo-vm = { git = "https://github.com/lambdaclass/cairo-vm", rev = "83bfdcf", features = ["mod_builtin"], default-features = false}
+cairo-vm = { git = "https://github.com/lambdaclass/cairo-vm", rev = "1d70783", features = ["mod_builtin"], default-features = false}
 hex = "0.4.3"
 serde = "1.0.134"
 serde_json = "1.0.134"
 serde-wasm-bindgen = "0.6.5"
-stwo_cairo_prover = { git = "https://github.com/starkware-libs/stwo-cairo.git", rev = "07d3a9f" }
-stwo_cairo_utils = { git = "https://github.com/starkware-libs/stwo-cairo.git", rev = "07d3a9f" }
-stwo-prover = { git = "https://github.com/starkware-libs/stwo", rev = "af5475cb", features = ["parallel"], default-features = false}
+cairo-air = { git = "https://github.com/starkware-libs/stwo-cairo.git", rev = "a278730", default-features = false}
+stwo-cairo-adapter = { git = "https://github.com/starkware-libs/stwo-cairo.git", rev = "a278730", default-features = false}
+stwo_cairo_prover = { git = "https://github.com/starkware-libs/stwo-cairo.git", rev = "a278730", default-features = false}
+stwo-prover = { git = "https://github.com/starkware-libs/stwo", rev = "045963c", default-features = false}
 thiserror-no-std = "2.0.2"
-wasm-bindgen = "0.2.84"
+wasm-bindgen = "0.2.100"
 zip = { version = "2.2.2", features = ["deflate"], default-features = false}
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
