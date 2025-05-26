@@ -9,13 +9,27 @@ use wasm_bindgen_test::*;
 wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
-fn trace_gen_prove_verify() {
-    let reader = std::io::Cursor::new(include_bytes!("fibonacci.zip"));
+fn trace_gen_prove_verify_cairo0() {
+    let reader = std::io::Cursor::new(include_bytes!("fibonacci_cairo0_pie.zip"));
     let zip_archive = zip::ZipArchive::new(reader).unwrap();
-
     let pie = from_zip_archive(zip_archive).unwrap();
+
     let trace_gen_output = trace_gen(pie).unwrap();
     let cairo_proof = prove(trace_gen_output.prover_input).unwrap();
     let verdict = verify(cairo_proof);
+
+    assert!(verdict);
+}
+
+#[wasm_bindgen_test]
+fn trace_gen_prove_verify_cairo1() {
+    let reader = std::io::Cursor::new(include_bytes!("fibonacci_cairo1_pie.zip"));
+    let zip_archive = zip::ZipArchive::new(reader).unwrap();
+    let pie = from_zip_archive(zip_archive).unwrap();
+
+    let trace_gen_output = trace_gen(pie).unwrap();
+    let cairo_proof = prove(trace_gen_output.prover_input).unwrap();
+    let verdict = verify(cairo_proof);
+
     assert!(verdict);
 }
