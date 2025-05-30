@@ -1,9 +1,26 @@
+mod error;
+mod executable;
+mod hint_processor;
+mod hints;
+mod runner;
 mod utils;
 
+use std::convert::TryFrom;
+
+use anyhow::{anyhow, bail, ensure, Context, Error, Result};
+use cairo_lang_sierra::{
+    extensions::circuit,
+    program::{Function, GenericArg, Program as SierraProgram},
+};
 use cairo_vm::{
-    cairo_run,
+    cairo_run::{self, CairoRunConfig},
     hint_processor::builtin_hint_processor::builtin_hint_processor_definition::BuiltinHintProcessor,
-    types::layout_name::LayoutName,
+    types::{
+        layout,
+        layout_name::LayoutName,
+        program::Program,
+        relocatable::{MaybeRelocatable, Relocatable},
+    },
     vm::{
         errors::cairo_run_errors::CairoRunError,
         runners::{
@@ -13,8 +30,15 @@ use cairo_vm::{
             cairo_runner::{ExecutionResources, RunResources},
         },
     },
+    Felt252,
 };
+use executable::{EntryPointKind, Executable};
+use num_bigint::BigInt;
+use runner::{cairo_run_program, Cairo1RunConfig, FuncArg};
+use serde::de::DeserializeOwned;
+// use crate::runner::{build_hints_dict, format_for_panic, Arg, CairoHintProcessor};
 use serde::{Deserialize, Serialize};
+use serde_wasm_bindgen::to_value;
 use stwo_cairo_prover::{
     cairo_air::{air::CairoProof, prove_cairo, verify_cairo, ProverConfig},
     input::{plain::adapt_finished_runner, ProverInput},
@@ -36,6 +60,81 @@ pub struct TraceGenOutput {
 pub struct TraceGenOutputJS {
     execution_resources: String,
     prover_input: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum Arg {
+    Value(Felt252),
+    Array(Vec<Arg>),
+}
+
+impl Arg {
+    /// Returns the size of the argument in the vm.
+    pub fn size(&self) -> usize {
+        match self {
+            Self::Value(_) => 1,
+            Self::Array(_) => 2,
+        }
+    }
+}
+impl From<Felt252> for Arg {
+    fn from(value: Felt252) -> Self {
+        Self::Value(value)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct FuncArgs(Vec<FuncArg>);
+
+/// Processes an iterator of format [s1, s2,.., sn, "]", ...], stopping at the first "]" string
+/// and returning the array [f1, f2,.., fn] where fi = Felt::from_dec_str(si)
+fn process_array<'a>(iter: &mut impl Iterator<Item = &'a str>) -> Result<FuncArg, String> {
+    let mut array = vec![];
+    for value in iter {
+        match value {
+            "]" => break,
+            _ => array.push(
+                Felt252::from_dec_str(value)
+                    .map_err(|_| format!("\"{}\" is not a valid felt", value))?,
+            ),
+        }
+    }
+    Ok(FuncArg::Array(array))
+}
+
+/// Parses a string of ascii whitespace separated values, containing either numbers or series of
+/// numbers wrapped in brackets Returns an array of felts and felt arrays
+fn process_args(value: &str) -> Result<FuncArgs, String> {
+    let mut args = Vec::new();
+    // Split input string into numbers and array delimiters
+    let mut input = value.split_ascii_whitespace().flat_map(|mut x| {
+        // We don't have a way to split and keep the separate delimiters so we do it manually
+        let mut res = vec![];
+        if let Some(val) = x.strip_prefix('[') {
+            res.push("[");
+            x = val;
+        }
+        if let Some(val) = x.strip_suffix(']') {
+            if !val.is_empty() {
+                res.push(val)
+            }
+            res.push("]")
+        } else if !x.is_empty() {
+            res.push(x)
+        }
+        res
+    });
+    // Process iterator of numbers & array delimiters
+    while let Some(value) = input.next() {
+        match value {
+            "[" => args.push(process_array(&mut input)?),
+            _ => args.push(FuncArg::Single(
+                Felt252::from_dec_str(value)
+                    .map_err(|_| format!("\"{}\" is not a valid felt", value))?,
+            )),
+        }
+    }
+    Ok(FuncArgs(args))
 }
 
 pub fn from_zip_archive<R: std::io::Read + std::io::Seek>(
@@ -73,6 +172,54 @@ pub fn from_zip_archive<R: std::io::Read + std::io::Seek>(
         version,
     })
 }
+
+#[wasm_bindgen]
+pub fn run_execute_trace_gen(program: JsValue, args: JsValue) -> JsValue {
+    let input: String = serde_wasm_bindgen::from_value(args).unwrap();
+
+    let sierra_program: SierraProgram = serde_wasm_bindgen::from_value(program).unwrap();
+    
+    let trace = execute_trace_gen(sierra_program, input);
+
+    return to_value(&trace).unwrap();
+}
+
+fn execute_trace_gen(sierra_program: SierraProgram, args: String) -> TraceGenOutputJS{
+    let user_args = process_args(&args)
+        .map_err(|e| JsValue::from(format!("Failed to process args: {e}")))
+        .unwrap();
+    let a: &[FuncArg] = &user_args.0;
+
+    let cairo_run_config = Cairo1RunConfig {
+        proof_mode: false,
+        serialize_output: false,
+        relocate_mem: true,
+        layout: LayoutName::all_cairo,
+        trace_enabled: true,
+        args: a,
+        finalize_builtins: true,
+        append_return_values: false,
+        ..Default::default()
+    };
+
+    let runner = cairo_run_program(&sierra_program, cairo_run_config).0;
+
+    let output_value = runner.get_cairo_pie().unwrap();
+
+    let trace_gen_output = trace_gen(output_value)
+        .map_err(|e| JsValue::from(format!("Failed to generate trace: {e}")))
+        .unwrap();
+    return TraceGenOutputJS {
+        prover_input: serde_json::to_string(&trace_gen_output.prover_input)
+            .map_err(|e| JsValue::from(format!("Failed to serialize prover input: {e}")))
+            .unwrap(),
+        execution_resources: serde_json::to_string(&trace_gen_output.execution_resources)
+            .map_err(|e| JsValue::from(format!("Failed to serialize execution resources: {e}")))
+            .unwrap(),
+    }
+}
+
+
 
 #[wasm_bindgen]
 pub fn run_trace_gen(program_content_js: JsValue) -> Result<JsValue, JsValue> {
@@ -156,4 +303,81 @@ pub fn prove(prover_input: ProverInput) -> Result<CairoProof<Blake2sMerkleHasher
 
 pub fn verify(cairo_proof: CairoProof<Blake2sMerkleHasher>) -> bool {
     verify_cairo::<Blake2sMerkleChannel>(cairo_proof).is_ok()
+}
+
+#[cfg(test)]
+mod tests {
+    // Import the outer function into the test module's scope
+    use super::*;
+
+    #[test]
+    fn test_execute() {
+        let input: String = "5".to_string();
+
+        // let user_args = process_args(&input).unwrap();
+
+        let sierra_program: SierraProgram = match read_json_file(
+            "/home/esdras/Downloads/stwo-web-stark/backend/swstest.sierra.json",
+        ) {
+            Ok(program) => program,
+            Err(e) => {
+                panic!("Failed to read Sierra program: {}", e);
+            }
+        };
+
+        let trace = execute_trace_gen(sierra_program, input);
+
+        // let a: &[FuncArg] = &user_args.0;
+
+        // let cairo_run_config = Cairo1RunConfig {
+        //     proof_mode: false,
+        //     serialize_output: false,
+        //     relocate_mem: true,
+        //     layout: LayoutName::all_cairo,
+        //     trace_enabled: true,
+        //     args: a,
+        //     finalize_builtins: true,
+        //     append_return_values: false,
+
+        //     ..Default::default()
+        // };
+
+        // let runner = cairo_run_program(&sierra_program, cairo_run_config).0;
+
+        // let output_value = runner.get_cairo_pie().unwrap();
+        // let cairo_pie: CairoPieDef = output_value.into();
+        // let trace_gen_output = trace_gen(cairo_pie.into())
+        //     .map_err(|e| JsValue::from(format!("Failed to generate trace: {e}")))
+        //     .unwrap();
+        // let tg = &TraceGenOutputJS {
+        //     prover_input: serde_json::to_string(&trace_gen_output.prover_input)
+        //         .map_err(|e| JsValue::from(format!("Failed to serialize prover input: {e}")))
+        //         .unwrap(),
+        //     execution_resources: serde_json::to_string(&trace_gen_output.execution_resources)
+        //         .map_err(|e| JsValue::from(format!("Failed to serialize execution resources: {e}")))
+        //         .unwrap(),
+        // };
+
+        let prover_input: ProverInput = serde_json::from_str(trace.prover_input.as_str())
+            .map_err(|e| JsValue::from(format!("Failed to deserialize prover input: {e}")))
+            .unwrap();
+        let proof = prove(prover_input)
+            .map_err(|e| JsValue::from(format!("Failed to generate proof: {e}")))
+            .unwrap();
+        let sp = serde_json::to_string(&proof).unwrap();
+        let proof: CairoProof<Blake2sMerkleHasher> = serde_json::from_str(sp.as_str())
+            .map_err(|e| JsValue::from(format!("Failed to deserialize proof: {e}")))
+            .unwrap();
+        let verdict = verify(proof);
+        assert!(verdict);
+    }
+
+    fn read_json_file(file_path: &str) -> Result<SierraProgram> {
+        let file = std::fs::File::open(file_path)?;
+        let reader = std::io::BufReader::new(file);
+
+        // Deserialize the JSON content into the Person struct.
+        let program: SierraProgram = serde_json::from_reader(reader)?;
+        Ok(program)
+    }
 }
