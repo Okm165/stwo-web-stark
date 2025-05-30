@@ -17,7 +17,7 @@
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.5",
     "serve": "^14.2.4",
-    "stwo-web-stark": "^0.1.0"
+    "stwo-web-stark": "file:backend/out/stwo-web-stark-0.1.0.tgz"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
