@@ -1,7 +1,8 @@
 mod utils;
 
+use cairo_air::{air::CairoProof, verifier::verify_cairo, PreProcessedTraceVariant};
 use cairo_vm::{
-    cairo_run,
+    cairo_run::{self},
     hint_processor::builtin_hint_processor::builtin_hint_processor_definition::BuiltinHintProcessor,
     types::layout_name::LayoutName,
     vm::{
@@ -15,17 +16,25 @@ use cairo_vm::{
     },
 };
 use serde::{Deserialize, Serialize};
-use stwo_cairo_prover::{
-    cairo_air::{air::CairoProof, prove_cairo, verify_cairo, ProverConfig},
-    input::{plain::adapt_finished_runner, ProverInput},
-};
-use stwo_cairo_utils::vm_utils::VmError;
+use stwo_cairo_adapter::{vm_import::VmImportError, ProverInput};
+use stwo_cairo_prover::prover::prove_cairo;
 use stwo_prover::core::{
+    pcs::PcsConfig,
     prover::ProvingError,
     vcs::blake2_merkle::{Blake2sMerkleChannel, Blake2sMerkleHasher},
 };
-use utils::set_panic_hook;
+use thiserror_no_std::Error;
+use utils::{adapt_finished_runner, set_panic_hook};
 use wasm_bindgen::prelude::*;
+
+extern crate alloc;
+
+#[cfg(target_arch = "wasm32")]
+use lol_alloc::{FreeListAllocator, LockedAllocator};
+
+#[cfg(target_arch = "wasm32")]
+#[global_allocator]
+static ALLOCATOR: LockedAllocator<FreeListAllocator> = LockedAllocator::new(FreeListAllocator::new());
 
 pub struct TraceGenOutput {
     pub execution_resources: ExecutionResources,
@@ -75,10 +84,10 @@ pub fn from_zip_archive<R: std::io::Read + std::io::Seek>(
 }
 
 #[wasm_bindgen]
-pub fn run_trace_gen(program_content_js: JsValue) -> Result<JsValue, JsValue> {
+pub fn run_trace_gen(pie_zip_js: JsValue) -> Result<JsValue, JsValue> {
     set_panic_hook();
 
-    let input: Vec<u8> = serde_wasm_bindgen::from_value(program_content_js)?;
+    let input: Vec<u8> = serde_wasm_bindgen::from_value(pie_zip_js)?;
     let reader = std::io::Cursor::new(input);
     let zip_archive = zip::ZipArchive::new(reader).unwrap();
 
@@ -124,7 +133,7 @@ pub fn trace_gen(pie: CairoPie) -> Result<TraceGenOutput, VmError> {
     let cairo_run_config = cairo_run::CairoRunConfig {
         trace_enabled: true,
         relocate_mem: true,
-        layout: LayoutName::all_cairo,
+        layout: LayoutName::all_cairo_stwo,
         ..Default::default()
     };
 
@@ -138,22 +147,41 @@ pub fn trace_gen(pie: CairoPie) -> Result<TraceGenOutput, VmError> {
     let cairo_runner = match cairo_runner_result {
         Ok(runner) => runner,
         Err(error) => {
-            return Err(VmError::Runner(error.to_string()));
+            return Err(VmError::Runner(error));
         }
     };
 
     Ok(TraceGenOutput {
         execution_resources: cairo_runner
             .get_execution_resources()
-            .map_err(|e| VmError::Runner(CairoRunError::Runner(e).to_string()))?,
-        prover_input: adapt_finished_runner(cairo_runner, false),
+            .map_err(|e| VmError::Runner(CairoRunError::Runner(e)))?,
+        prover_input: adapt_finished_runner(cairo_runner)?,
     })
 }
 
 pub fn prove(prover_input: ProverInput) -> Result<CairoProof<Blake2sMerkleHasher>, ProvingError> {
-    prove_cairo::<Blake2sMerkleChannel>(prover_input, ProverConfig::default())
+    prove_cairo::<Blake2sMerkleChannel>(
+        prover_input,
+        PcsConfig::default(),
+        PreProcessedTraceVariant::CanonicalWithoutPedersen,
+    )
 }
 
 pub fn verify(cairo_proof: CairoProof<Blake2sMerkleHasher>) -> bool {
-    verify_cairo::<Blake2sMerkleChannel>(cairo_proof).is_ok()
+    verify_cairo::<Blake2sMerkleChannel>(
+        cairo_proof,
+        PcsConfig::default(),
+        PreProcessedTraceVariant::CanonicalWithoutPedersen,
+    )
+    .is_ok()
+}
+
+#[derive(Debug, Error)]
+pub enum VmError {
+    #[error("Failed to interact with the file system")]
+    IO(#[from] std::io::Error),
+    #[error("The cairo program execution failed")]
+    Runner(#[from] CairoRunError),
+    #[error("The adapter execution failed")]
+    Adapter(#[from] VmImportError),
 }
